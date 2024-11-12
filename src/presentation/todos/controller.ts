@@ -1,4 +1,8 @@
+
 import { Request, Response } from "express"
+import { prisma } from "../../data/postgres";
+import { CreatedTodoDto, UpdateTodoDto } from "../../domain/dtos";
+
 
 
 const todos = [
@@ -13,82 +17,85 @@ export class TodosController{
     constructor(){}
 
 
-    public getTodos = (req:Request, res:Response)=>{ // req and res of express
+    public getTodos = async (req:Request, res:Response)=>{ // req and res of express
+
+        // res.json(todos);
+        const todos = await prisma.todo.findMany();      
         res.json(todos);
-    }
+    };
 
 
 
 
 
-    public getTodoById = (req:Request, res:Response) =>{
+    public getTodoById = async(req:Request, res:Response) =>{
         const id = +req.params.id;
         if( isNaN(id) ) res.status(400).json({error:'Id argument is not a number'});
-        const todo = todos.find( todo => todo.id === id );
+        
+        // const todo = todos.find( todo => todo.id === id );
+        const todo = await prisma.todo.findUnique({
+            where:{id : id},
+        });
+
+
         // validacion si existe 
         ( todo )
         ? res.json(todo)
         : res.status(404).json({error:`TODO with id ${ id } not found`})
-    }
+    };
 
 
 
 
     public createdTodo = async (req:Request,res:Response) =>{
-        //  res.json('POST created todo')
-        const {text} = req.body;
+        
+        const [error,createTodoDto] = CreatedTodoDto.create(req.body);
 
-        if( !text ) {
-            res.status(400).json({error:"Text property is required"});
+        if( error) {
+            res.status(400).json({error});
             return;
-        } 
-
-        const newTodo={
-            id: todos.length +1,
-            text:text,
-            createdAt: null,
         }
-
-        todos.push(newTodo);
-        res.json(newTodo);
-    }
-
-
-
+        const todo = await prisma.todo.create({
+            data: createTodoDto! // data:{text:text}
+        });
+        res.json(todo);
+    };
 
 
-    public updateTodo = (req:Request, res:Response)=>{
+
+    public updateTodo = async (req:Request, res:Response)=>{
+
         const id = +req.params.id;
-        if ( isNaN(id)){
-            res.status(400).json({error:'Id property is requared'});
+
+        // ... req.body = igual como si abriera el contenido y lo pusiera como llave : valor
+        const [error,updateTodoDto]=UpdateTodoDto.create({...req.body, id}); // envia el json de las peticion req y adjunta la key id con su valor
+       
+        if ( error ){
+            res.status(400).json({error})
             return;
-        }
-        
-        const todo = todos.find(todo => todo.id === id);
+        };
+
+        const todo = await prisma.todo.findFirst({
+            where:{id}
+        });
+
         if(!todo){
-            res.status(404).json({error:`Todo with ${id} not found` })
+            res.status(404).json({error:`Todo with ${id} not found`})
             return;
-        }
-
-        const {text,createdAt}=req.body;
-        if(!text){
-            res.status(400).json({error:'Text property is requared'})
-            return;
-        }
+        };
         
-        todo.text = text || todo.text;
-
-        (createdAt === null)
-        ? todo.createdAt = null
-        : todo.createdAt = new Date( createdAt || todo.createdAt);
-        res.json(todo)
+        const updateTodo = await prisma.todo.update({
+            where:{id},
+            data:updateTodoDto!.values
+        });
+        res.json( updateTodo );
     }
 
 
 
 
 
-    public deleteTodo = (req:Request, res:Response)=>{
+    public deleteTodo = async(req:Request, res:Response)=>{
         const id = +req.params.id;
 
         if( isNaN(id) ){
@@ -96,13 +103,21 @@ export class TodosController{
             return; 
         }
 
-        const todo = todos.find(todo => todo.id === id);
+        const todo = await prisma.todo.findFirst({
+            where:{id}
+        });
+
+
         if(!todo){
             res.status(400).json({error:`Todo with ${id} not found`})
             return;
         }
         
-       todos.splice(todos.indexOf(todo),1)
-       res.json(todo);
+       const deletedTodo = await prisma.todo.delete({
+        where: {id}
+       });
+
+
+       res.json(deletedTodo);
     }
 }

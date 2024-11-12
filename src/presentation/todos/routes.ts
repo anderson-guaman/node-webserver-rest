@@ -23,6 +23,5 @@ export class TodoRoutes{
         router.delete('/:id',todoController.deleteTodo);
 
         return router;
-        
     }
 }
